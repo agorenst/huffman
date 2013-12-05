@@ -1,11 +1,13 @@
 #include <string>
 #include <list>
 #include <map>
-#include <memory>
-#include <queue>
+#include <memory> // shared_ptr
+#include <queue> // priority_queue
 #include <iostream>
 
 using namespace std;
+
+/* KEY DATA STRUCTURES */
 
 // this associates a string with a double.
 // most importantly, it creates an ordering.
@@ -18,11 +20,10 @@ class encoding {
         encoding(string s, double f): s(s), f(f) {}
 
         // this is important for when we put these in priority queue
+        // note that operator< ultimately calls the > operator.
+        // this ''flip'' is because the lower weight, the more important!
         bool operator<(const encoding& e) const {
             if (f == e.f) { return s < e.s; }
-            // we go opposite, because priority queue
-            // basically, the lowest encoding 
-            // is the highest frequency
             return f > e.f;
         }
         encoding operator+(encoding e) const {
@@ -30,10 +31,6 @@ class encoding {
         }
 };
 
-ostream& operator<<(ostream& o, const encoding& e) {
-    o << e.s << ": " << e.f;
-    return o;
-}
 
 // this is the simple binary tree structure
 // we will be using in our algorithm.
@@ -59,7 +56,9 @@ struct indirect_htree : public shared_ptr<htree> {
     indirect_htree(htree* h): shared_ptr<htree>(h) {}
 };
 
-//THIS IS THE WHOLE ALGORITHM.
+
+/* THE ALGORITHM */
+
 // A lot of the "magic" happens thanks to the fact
 // that the priority queue works correctly:
 // hence (partly) the need for indirect_htree class.
@@ -67,7 +66,7 @@ template<class iter>
 indirect_htree huffman(iter start, iter end) {
     
     // this work-queue holds our forest of trees.
-    std::priority_queue<indirect_htree> wq;
+    priority_queue<indirect_htree> wq;
 
     // we initialize the forest to n size-1 (ie, leaves)
     // trees.
@@ -87,6 +86,11 @@ indirect_htree huffman(iter start, iter end) {
     }
     return wq.top();
 }
+
+
+/*
+ * STARTING PRINTING FUNCTIONS
+ */
 
 // so given a huffman encoding (ie, the tree structure),
 // now we want to actually print out the encodings.
@@ -112,6 +116,10 @@ map<string,string> start_coding_map(shared_ptr<htree> h) {
     return m;
 }
 
+ostream& operator<<(ostream& o, const encoding& e) {
+    o << e.s << ": " << e.f;
+    return o;
+}
 // here is the infix printing of the htree itself.
 ostream& operator<<(ostream& o, shared_ptr<htree> h) {
     if (h == NULL) { return o; }
@@ -119,10 +127,17 @@ ostream& operator<<(ostream& o, shared_ptr<htree> h) {
     return o;
 }
 
+/*
+ * ENDING PRINTING FUNCTIONS
+ */
+
+
+
+
 int main(int argc, char* argv[]) {
-    std::string s;
+    string s;
     double f;
-    std::list<encoding> encodings;
+    list<encoding> encodings;
     while(!cin.eof()) {
         cin >> s;
         cin >> f;
@@ -130,15 +145,16 @@ int main(int argc, char* argv[]) {
         //encodings.insert(encoding(s,f));
     }
     // weird error with input reading loop, so we loop once more.
-    // easy remedy.
+    // easy remedy. TODO how set eof before failure? I see what's going on...
     encodings.pop_back();
 
-//    for (auto it = encodings.begin(); it != encodings.end(); ++it) {
-//        cout << *it << endl;
-//    }
+    // from the basic encodings, build the huffman tree.
     auto h = huffman(encodings.begin(), encodings.end());
-    cout << h << endl;
+
+    // recursively traverse the huffman tree to build the encoding.
     auto m = start_coding_map(h);
+
+    // sending encoding to stdout.
     for (auto it = m.begin(); it != m.end(); ++it) {
         cout << it->first << ": " << it->second << endl;
     }
