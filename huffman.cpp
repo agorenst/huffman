@@ -1,41 +1,37 @@
+
 #include <string>
-#include <list>
 #include <map>
+
+#include <list>
 #include <memory> // shared_ptr
 #include <queue> // priority_queue
 #include <iostream>
+#include <cmath>
 
 using namespace std;
 
 /* KEY DATA STRUCTURES */
 
-// this associates a string with a double.
-// most importantly, it creates an ordering.
-class encoding {
+// The huffman algorithm takes as input a sequence of <symbol, frequency> pairs.
+// These are stored in this structure, which is basically a tuple with < and + operators.
+class encoding : public std::pair<std::string, double> {
     public:
-        const string s; // symbol
-        const double f; // frequency of symbol
+        encoding(std::string s, double f): std::pair<std::string, double> (s, f) {}
 
-        encoding(): s(""), f(0) {}
-        encoding(string s, double f): s(s), f(f) {}
-
-        // this is important for when we put these in priority queue
-        // note that operator< ultimately calls the > operator.
-        // this ''flip'' is because the lower weight, the more important!
+        // we create an ordering, core is based on frequency (second)
         bool operator<(const encoding& e) const {
-            if (f == e.f) { return s < e.s; }
-            return f > e.f;
+            if (second == e.second) { return first < e.first; }
+            return second > e.second;
         }
-        encoding operator+(encoding e) const {
-            return encoding(s+e.s , f+e.f);
+        encoding operator+(const encoding& e) const {
+            return encoding(first+e.first, second+e.second);
         }
 };
 
-
-// this is the simple binary tree structure
-// we will be using in our algorithm.
-// NOTE: we can only construct either deg-0, or deg-2
-// trees! 
+// the huffman algorithm iteratively builds up a binary tree.
+// This is the basic recursive tree we use.
+// Observe that all fields are const, and we only have 2 constructors
+// (one for 0-children, one for 2-children).
 struct htree {
     const shared_ptr<htree> l, r;
     const encoding e;
@@ -44,11 +40,11 @@ struct htree {
     bool is_leaf() const { return l == NULL && r == NULL; }
 };
 
-// as we build the forest of more htrees,
-// we will be using a lot of shared_ptr<htree>s.
-// This makes it more convenient, and MOST IMPORTANTLY,
-// adds in the ordering operator, so the priority queue actually
-// works correctly.
+
+// the huffman algorithm has to order the htrees
+// based on their "weight".
+// Moreover, it only makes sense to work with shared_ptr<htree>s.
+// This provides a neat wrapper for both.
 struct indirect_htree : public shared_ptr<htree> {
     bool operator<(const indirect_htree& h) const {
         return (*this)->e < h->e;
@@ -56,15 +52,14 @@ struct indirect_htree : public shared_ptr<htree> {
     indirect_htree(htree* h): shared_ptr<htree>(h) {}
 };
 
-
-/* THE ALGORITHM */
+/* THE MAIN ALGORITHM */
 
 // A lot of the "magic" happens thanks to the fact
 // that the priority queue works correctly:
 // hence (partly) the need for indirect_htree class.
 template<class iter>
-indirect_htree huffman(iter start, iter end) {
-    
+shared_ptr<htree> build_tree(iter start, iter end) {
+
     // this work-queue holds our forest of trees.
     priority_queue<indirect_htree> wq;
 
@@ -87,37 +82,56 @@ indirect_htree huffman(iter start, iter end) {
     return wq.top();
 }
 
+/* THE SECOND (MUNDANE) PART OF THE ALGORITHM:
+ * given a fully-built huffman tree, actually make the 
+ * mapping between strings and their binary code.
+ *
+ * We use a queue to explore the tree---recursion would
+ * be theoretically nicer, but this is C++.
+ */
+map<string,string> build_code(shared_ptr<htree> h) {
+    map<string, string> code;
+    std::queue<pair<shared_ptr<htree>,string>> tovisit;
+    tovisit.push(pair<shared_ptr<htree>,string>(h,""));
+    while(tovisit.size()) {
+        auto nxt = tovisit.front(); tovisit.pop();
+        auto node = nxt.first;
+        auto word = nxt.second;
+        if (node->is_leaf()) {
+            code[node->e.first] = word;
+        }
+        else {
+            tovisit.push(pair<shared_ptr<htree>,string>(node->l,word+'0'));
+            tovisit.push(pair<shared_ptr<htree>,string>(node->r,word+'1'));
+        }
+    }
+    return code;
+}
+
+template<class iter>
+double compute_cost(iter begin, iter end, map<string,string>& code) {
+    double cost = 0;
+    for (auto it = begin; it != end; ++it) {
+        cost += code[it->first].size()*(it->second);
+    }
+    return cost;
+}
+
+template<class iter>
+double compute_entropy(iter begin, iter end) {
+    double cost = 0;
+    for (auto it = begin; it != end; ++it) {
+        double freq = it->second;
+        cost += -(log(freq)/log(2))*freq;
+    }
+    return cost;
+}
 
 /*
  * STARTING PRINTING FUNCTIONS
  */
-
-// so given a huffman encoding (ie, the tree structure),
-// now we want to actually print out the encodings.
-// Here is the recursive way to do it.
-void coding_map(map<string,string>& m, shared_ptr<htree> h, string parent_string, bool left_child) {
-    string s = parent_string;
-    if (left_child) { s += "0"; }
-    else            { s += "1"; }
-    if (h->is_leaf()) {
-        m[h->e.s] = s;
-    }
-    else {
-        coding_map(m, h->l, s, true);
-        coding_map(m, h->r, s, false);
-    }
-}
-
-// this is the base-case of the recursion.
-map<string,string> start_coding_map(shared_ptr<htree> h) {
-    map<string,string> m;
-    coding_map(m, h->l, "", true);
-    coding_map(m, h->r, "", false);
-    return m;
-}
-
 ostream& operator<<(ostream& o, const encoding& e) {
-    o << e.s << ": " << e.f;
+    o << e.first << ": " << e.second;
     return o;
 }
 // here is the infix printing of the htree itself.
@@ -126,7 +140,6 @@ ostream& operator<<(ostream& o, shared_ptr<htree> h) {
     o << h->e << endl << h->l << h->r;
     return o;
 }
-
 /*
  * ENDING PRINTING FUNCTIONS
  */
@@ -149,13 +162,17 @@ int main(int argc, char* argv[]) {
     encodings.pop_back();
 
     // from the basic encodings, build the huffman tree.
-    auto h = huffman(encodings.begin(), encodings.end());
+    auto h = build_tree(encodings.begin(), encodings.end());
 
+    cout << h << endl;
     // recursively traverse the huffman tree to build the encoding.
-    auto m = start_coding_map(h);
-
-    // sending encoding to stdout.
+    //auto m = start_coding_map(h);
+    auto m = build_code(h);
+//
+//    // sending encoding to stdout.
     for (auto it = m.begin(); it != m.end(); ++it) {
         cout << it->first << ": " << it->second << endl;
     }
+    cout << "Cost: " << compute_cost(encodings.begin(), encodings.end(), m) << endl;
+    cout << "Entropy: " << compute_entropy(encodings.begin(), encodings.end()) << endl;
 }
