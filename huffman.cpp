@@ -30,6 +30,17 @@ using namespace huffman;
 template<class iter>
 shared_ptr<htree> huffman::build_tree(iter start, iter end) {
 
+    // this local class is critical: it implements the < operator
+    // correctly.
+    // Note that a priority_queue will work with shared_ptr, it just
+    // won't make sense.
+    struct indirect_htree : public std::shared_ptr<htree> {
+        bool operator<(const indirect_htree& h) const {
+            return (*this)->e < h->e;
+        }
+        indirect_htree(htree* h): std::shared_ptr<htree>(h) {}
+    };
+
     // this work-queue holds our forest of trees.
     priority_queue<indirect_htree> wq;
 
@@ -52,7 +63,8 @@ shared_ptr<htree> huffman::build_tree(iter start, iter end) {
     return wq.top();
 }
 
-// we use templates---extend as necessary (according to http://stackoverflow.com/questions/115703/storing-c-template-function-definitions-in-a-cpp-file) can't do better than this.
+// we use templates---extend as necessary (according to
+// http://stackoverflow.com/questions/115703/storing-c-template-function-definitions-in-a-cpp-file) can't do better than this.
 template
 shared_ptr<htree> huffman::build_tree<list<encoding>::iterator>
 (list<encoding>::iterator start, list<encoding>::iterator end);

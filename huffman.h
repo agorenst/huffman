@@ -7,11 +7,9 @@
 
 /*
  * This header file defines the huffman namespace.
- * It has 3 data structures:
+ * It has 2 data structures:
  *    encoding is a pair<string, double> with a < and + operator.
  *    htree is the basic tree, with data=encoding, and limited constructors.
- *    indirect_htree wraps a shared_ptr<htree> and adds a < operator
- *       the < operator for indirect_htree is key for the priority queue
  * What is left declared, but undefined, is build_tree, which is the
  * "main" huffman encoding greedy algorithm, and "build_code",
  * which is just a BFS exploration of the tree, building the binary string.
@@ -52,14 +50,6 @@ namespace huffman {
     };
 
 
-    // the huffman algorithm has to order the htrees
-    // based on their "weight".
-    // Moreover, it only makes sense to work with shared_ptr<htree>s.
-    // This provides a neat wrapper for both.
-    struct indirect_htree : public std::shared_ptr<htree> {
-        bool operator<(const indirect_htree& h) const { return (*this)->e < h->e; }
-        indirect_htree(htree* h): std::shared_ptr<htree>(h) {}
-    };
 
     template<class iter>
         std::shared_ptr<htree> build_tree(iter start, iter end);

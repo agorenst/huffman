@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
     // from the basic encodings, build the huffman tree.
     auto h = huffman::build_tree(encodings.begin(), encodings.end());
 
-    // recursively traverse the huffman tree to build the encoding.
+    // build the encoding.
     auto m = huffman::build_code(h);
 
     // sending encoding to stdout.
