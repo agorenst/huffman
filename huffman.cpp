@@ -1,9 +1,26 @@
 #include "huffman.h"
 
 #include <list>
+#include <queue>
 
 using namespace std;
 using namespace huffman;
+
+/*
+ * See huffman.h for any unclear data structures.
+ * This just contains the two "main" algorithms:
+ * build_tree: given a range of encodings, build a huffman tree
+ * build_code: given a huffman code, build a string->string map
+ * defining the encoding.
+ *
+ * NB: because build_tree is a template in a cpp file, we have to
+ * explicitly instantiate it for each type we'd like.
+ * Given the tiny size of all this program and everything, it seems unecessary,
+ * but for larger programs this (and extern template) are all rather important.
+ *
+ * This is, of course, a C++-related note, nothing to do with the algorithm.
+ *
+ */
 
 /* THE MAIN ALGORITHM */
 
@@ -14,7 +31,7 @@ template<class iter>
 shared_ptr<htree> huffman::build_tree(iter start, iter end) {
 
     // this work-queue holds our forest of trees.
-    std::priority_queue<indirect_htree> wq;
+    priority_queue<indirect_htree> wq;
 
     // we initialize the forest to n size-1 (ie, leaves)
     // trees.
@@ -37,7 +54,11 @@ shared_ptr<htree> huffman::build_tree(iter start, iter end) {
 
 // we use templates---extend as necessary (according to http://stackoverflow.com/questions/115703/storing-c-template-function-definitions-in-a-cpp-file) can't do better than this.
 template
-shared_ptr<htree> huffman::build_tree<list<encoding>::iterator>(list<encoding>::iterator start, list<encoding>::iterator end);
+shared_ptr<htree> huffman::build_tree<list<encoding>::iterator>
+(list<encoding>::iterator start, list<encoding>::iterator end);
+
+
+
 
 /* THE SECOND (MUNDANE) PART OF THE ALGORITHM:
  * given a fully-built huffman tree, actually make the 
@@ -46,15 +67,24 @@ shared_ptr<htree> huffman::build_tree<list<encoding>::iterator>(list<encoding>::
  * We use a queue to explore the tree---recursion would
  * be theoretically nicer, but this is C++.
  */
-std::map<std::string,std::string> huffman::build_code(std::shared_ptr<htree> h) {
-    typedef std::pair<std::shared_ptr<htree>, std::string> tree_state;
-    std::map<std::string, std::string> code;
-    std::queue<tree_state> tovisit;
+map<string,string> huffman::build_code(shared_ptr<htree> h) {
+    typedef pair<shared_ptr<htree>, string> tree_state;
+
+    // we ultimately map leaves of h to "binary" strings.
+    map<string, string> code;
+
+    // we're doing a BFS exploration of h.
+    // at each node we save the node location (shared_ptr<htree>)
+    // and the currently-built codeword (string), hence tree_state definition
+    queue<tree_state> tovisit;
+
+    // start the BFS
     tovisit.push(tree_state(h,""));
     while(tovisit.size()) {
         auto nxt = tovisit.front(); tovisit.pop();
         auto node = nxt.first;
         auto word = nxt.second;
+
         if (node->is_leaf()) {
             code[node->e.first] = word;
         }
