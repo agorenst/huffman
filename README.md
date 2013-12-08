@@ -2,7 +2,6 @@ huffman
 =======
 
 Simple implementation of Huffman encoding algorithm.
-====================================================
 
 Source Files
 ============
@@ -34,8 +33,7 @@ Ideally, it is a playground to explore
 2) Some fun/interesting C++ features.
 3) The fun and interesting Huffman algorithm!
 
-Efficiency Exploration
-----------------------
+## Efficiency Exploration
 
 How do we achieve 1)?
 C++ allows for both high-level and low-level implementation details.
@@ -44,8 +42,7 @@ That can obviously vary based on how you implement the algorithm.
 I cannot claim to be particularly knowledgeable about true low-level optimizations, but casual experiments seem to show that each "symbol" adds about 12 memory allocations and about 500 bytes.
 This is just linear extrapolation from some of the input test files and valgrind results.
 
-Exploring C++
--------------
+## Exploring C++
 
 How do we achieve 2)?
 There is the question of the "right" implementation---Perl people may not like that idea.
@@ -56,8 +53,7 @@ Is there possibly a "better" encapsulation option?
 Can we do something better re: templates for the build_tree function? If you know the answer, do let me know...
 Can we make code terser or "better-expressed" in some places or others?
 
-Huffman Exploration
--------------------
+## Huffman Exploration
 
 How do we achieve 3)?
 For the uninitiated, the algorithm can be quite unintuitive.
@@ -78,7 +74,7 @@ Moreover, the algorithm is so tiny, unit tests seem overwhelming---again we sacr
 
 
 Target Audience
-===============
+---------------
 
 Who is the target audience for this program?
 This code was based off of something I wrote to help me grade homework questions concerning the Huffman algorithm as a TA for an undergrad algorithms course.
