@@ -3,7 +3,7 @@
 
 #include <map>
 #include <string>
-#include <memory>
+#include <memory> // smarter pointers
 
 /*
  * This header file defines the huffman namespace.
@@ -23,17 +23,20 @@ namespace huffman {
 
     // The huffman algorithm takes as input a sequence of <symbol, frequency> pairs.
     // These are stored in this structure, which is basically a tuple with < and + operators.
-    class encoding : public std::pair<std::string, double> {
+    class encoding : public std::pair<const std::string, const double> {
         public:
-            encoding(std::string s, double f): std::pair<std::string, double> (s, f) {}
+            encoding(const std::string s, const double f): std::pair<const std::string, const double> (s, f) {}
 
-            // we create an ordering, core is based on frequency (second)
+            // we create an ordering---does having equality cause issues?
             bool operator<(const encoding& e) const {
-                if (second == e.second) { return first < e.first; }
+                if (second == e.second) { return first < (e.first); }
                 return second > e.second;
             }
+            // used to create parent nodes---but they don't have real strings.
+            // we could also have encoding(first+e.first, second+e.second)
+            // but that adds some allocations.
             encoding operator+(const encoding& e) const {
-                return encoding(first+e.first, second+e.second);
+                return encoding("",second+e.second);
             }
     };
 
@@ -48,8 +51,6 @@ namespace huffman {
         htree(encoding e): l(), r(), e(e) {}
         bool is_leaf() const { return l == NULL && r == NULL; }
     };
-
-
 
     template<class iter>
         std::shared_ptr<htree> build_tree(iter start, iter end);

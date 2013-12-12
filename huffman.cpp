@@ -3,8 +3,27 @@
 #include <list>
 #include <queue>
 
+#include <iostream>
+
 using namespace std;
 using namespace huffman;
+
+
+// this local class is critical: it implements the < operator
+// correctly.
+// Note that a priority_queue will work with shared_ptr, it just
+// won't make sense (ie the ordering is arbitrary)
+//
+// also encapsulates "new" commands.
+struct managed_htree : public std::shared_ptr<htree> {
+    bool operator<(const managed_htree& h) const {
+        return (*this)->e < h->e;
+    }
+    managed_htree(const encoding e): shared_ptr<htree>(new htree(e)) {}
+    managed_htree(managed_htree l, managed_htree r): shared_ptr<htree>(new htree(l,r)) {}
+};
+
+
 
 /*
  * See huffman.h for any unclear data structures.
@@ -26,28 +45,18 @@ using namespace huffman;
 
 // A lot of the "magic" happens thanks to the fact
 // that the priority queue works correctly:
-// hence (partly) the need for indirect_htree class.
+// hence (partly) the need for managed_htree class.
 template<class iter>
 shared_ptr<htree> huffman::build_tree(iter start, iter end) {
 
-    // this local class is critical: it implements the < operator
-    // correctly.
-    // Note that a priority_queue will work with shared_ptr, it just
-    // won't make sense.
-    struct indirect_htree : public std::shared_ptr<htree> {
-        bool operator<(const indirect_htree& h) const {
-            return (*this)->e < h->e;
-        }
-        indirect_htree(htree* h): std::shared_ptr<htree>(h) {}
-    };
 
     // this work-queue holds our forest of trees.
-    priority_queue<indirect_htree> wq;
+    priority_queue<managed_htree> wq;
 
     // we initialize the forest to n size-1 (ie, leaves)
     // trees.
     for (auto it = start; it != end; ++it) {
-        wq.push(indirect_htree(new htree(*it)));
+        wq.push(managed_htree(*it));
     }
 
     // here is the greedy algorithm: we combine the two
@@ -58,7 +67,7 @@ shared_ptr<htree> huffman::build_tree(iter start, iter end) {
     while (wq.size() > 1) {
         auto min1 = wq.top(); wq.pop();
         auto min2 = wq.top(); wq.pop();
-        wq.push(indirect_htree(new htree(min1,min2)));
+        wq.push(managed_htree(min1,min2));
     }
     return wq.top();
 }

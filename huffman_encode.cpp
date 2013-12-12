@@ -3,8 +3,10 @@
 #include <map>
 
 #include <list>
+#include <vector>
 #include <memory> // shared_ptr
 #include <iostream>
+#include <array>
 
 using namespace std;
 
@@ -19,7 +21,7 @@ using namespace std;
 
 
 ostream& operator<<(ostream& o, const huffman::encoding& e) {
-    o << e.first << ": " << e.second;
+    o << (e.first) << ": " << e.second;
     return o;
 }
 
@@ -38,7 +40,7 @@ int main(int argc, char* argv[]) {
     for (;;) {
         cin >> s;
         cin >> f;
-        // if the eof flag is set, that means s, f haven't changed.
+        // if the eof flag is set, that means s, f haven't changed and the file's done.
         if (cin.eof()) { break; }
         encodings.push_back(huffman::encoding(s,f));
     }
@@ -46,7 +48,7 @@ int main(int argc, char* argv[]) {
     // from the basic encodings, build the huffman tree.
     auto h = huffman::build_tree(encodings.begin(), encodings.end());
 
-    // build the encoding.
+    // build the encoding from the tree (ie, explore the tree).
     auto m = huffman::build_code(h);
 
     // sending encoding to stdout.
