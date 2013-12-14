@@ -1,9 +1,12 @@
+#include "new_huffman.h"
+
 #include <string>
 #include <vector>
 #include <queue>
-#include <iostream>
+#include <stack>
+#include <tuple>
+
 #include <memory>
-#include <map>
 
 using namespace std;
 
@@ -22,6 +25,8 @@ struct cmp_ptr{
         return l->w > r->w;
     }
 };
+
+//shared_ptr<htree> build_tree
 
 void huffman_encode(istream& in, ostream& out) {
     vector<string> words;
@@ -47,43 +52,32 @@ void huffman_encode(istream& in, ostream& out) {
     }
 
 
-//    queue<shared_ptr<htree>> tovisit;
-//    tovisit.push(wq.top());
-//    while (tovisit.size()) {
-//        auto node = tovisit.front(); tovisit.pop();
-//        if (node->is_leaf()) {
-//            out << words[node->i] << " " << code << endl;
-//        }
-//        else {
-//            tovisit.push(node->l);
-//            tovisit.push(node->r);
-//        }
-//    }
+    // definitely more room than we need---shrink?
+    vector<char> codeword(words.size());
+    typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
 
-    typedef pair<shared_ptr<htree>, string> tree_state;
+    stack<tree_state> tovisit;
 
-    // we're doing a BFS exploration of h.
-    // at each node we save the node location (shared_ptr<htree>)
-    // and the currently-built codeword (string), hence tree_state definition
-    queue<tree_state> tovisit;
+    // start DFS (we have to do DFS)
+    tovisit.push(tree_state(wq.top(),0, false));
 
-    // start the BFS
-    tovisit.push(tree_state(wq.top(),""));
     while(tovisit.size()) {
-        auto nxt = tovisit.front(); tovisit.pop();
-        auto node = nxt.first;
-        auto word = nxt.second;
+        auto nxt = tovisit.top(); tovisit.pop();
+        auto node = get<0>(nxt);
+        auto len =  get<1>(nxt);
+        auto left = get<2>(nxt);
+        if (len > 0) { codeword[len-1] = left ? '0' : '1'; }
 
         if (node->is_leaf()) {
-            out << words[node->i] << " " << word << endl;
+            out << words[node->i] << " ";
+            for (unsigned l = 0; l < len; ++l) {
+                out << codeword[l];
+            }
+            out << endl;
         }
         else {
-            tovisit.push(tree_state(node->l,word+'0'));
-            tovisit.push(tree_state(node->r,word+'1'));
+            tovisit.push(tree_state(node->l,len+1,true));
+            tovisit.push(tree_state(node->r,len+1,false));
         }
     }
-}
-
-int main() {
-    huffman_encode(cin, cout);
 }
