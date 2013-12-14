@@ -1,3 +1,8 @@
 *~
 huffman
-
+new_huffman
+new_huffman.o
+new_huffman_driver
+huffman_encode
+inputs/*
+tikz/*
