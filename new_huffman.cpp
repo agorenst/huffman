@@ -28,38 +28,14 @@ struct cmp_ptr{
 
 //shared_ptr<htree> build_tree
 
-void huffman_encode(istream& in, ostream& out) {
-    vector<string> words;
-    priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
-
-    string s;
-    double d;
-    for (;;) {
-        in >> s;
-        in >> d;
-        if (in.eof()) { break; }
-
-
-        // we build a static ``array'' of words and our initial workqueue
-        words.emplace_back(s);
-        wq.emplace(new htree(d, words.size()-1));
-    }
-
-    while(wq.size() > 1) {
-        auto min1 = wq.top(); wq.pop();
-        auto min2 = wq.top(); wq.pop();
-        wq.emplace(new htree(min1,min2));
-    }
-
-
-    // definitely more room than we need---shrink?
-    vector<char> codeword(words.size());
+void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
     typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
 
+    vector<char> codeword(encodings.size());
     stack<tree_state> tovisit;
 
     // start DFS (we have to do DFS)
-    tovisit.push(tree_state(wq.top(),0, false));
+    tovisit.push(tree_state(h, 0, false));
 
     while(tovisit.size()) {
         auto nxt = tovisit.top(); tovisit.pop();
@@ -69,15 +45,28 @@ void huffman_encode(istream& in, ostream& out) {
         if (len > 0) { codeword[len-1] = left ? '0' : '1'; }
 
         if (node->is_leaf()) {
-            out << words[node->i] << " ";
-            for (unsigned l = 0; l < len; ++l) {
-                out << codeword[l];
-            }
-            out << endl;
+            encodings[node->i] = string(codeword.begin(), codeword.begin()+len);
         }
         else {
             tovisit.push(tree_state(node->l,len+1,true));
             tovisit.push(tree_state(node->r,len+1,false));
         }
     }
+}
+
+void huffman_encode(const vector<pair<string,double>>& freqs, vector<string>& encodings) {
+    priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
+    for (auto i = 0; i < freqs.size(); ++i) {
+        wq.emplace(new htree(freqs[i].second, i));
+    }
+
+    while(wq.size() > 1) {
+        auto min1 = wq.top(); wq.pop();
+        auto min2 = wq.top(); wq.pop();
+        wq.emplace(new htree(min1,min2));
+    }
+
+
+    // this generates the encodings
+    generate_encodings(wq.top(), encodings);
 }
