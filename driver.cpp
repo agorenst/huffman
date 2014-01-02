@@ -32,6 +32,7 @@ class feed_buffer : public array<T, S> {
     // invariant: S >= next_empty
     unsigned room() const { return S - next_empty; }
     unsigned toread() const { return next_empty - consumed; }
+    unsigned used() const { return next_empty; }
 
     // invariant (assumption must be maintained by user: room() >= l
     void append(const T* a, unsigned l) { 
@@ -59,6 +60,10 @@ class feed_buffer : public array<T, S> {
 
 const int buffsize = 4096;
 const unsigned char_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (the character).
+
+unsigned feed_huff_buff(istream& in, feed_buffer<char, buffsize>& huff_buff) {
+
+}
 
 // this takes in a file, a buffer, and a huffman encoding map.
 // we read in a character from the infile, look up its encoding,
@@ -134,22 +139,32 @@ void write_compressed_file(istream& infile, ostream& outfile) {
     feed_buffer<char, buffsize> fake_bin_buff;
     feed_buffer<char, buffsize> real_bin_buff;
     
-    // read as many bytes as you can into fake_bin_buff
-    auto bytes_read = file_to_huff(infile, fake_bin_buff);
 
-    // take as many 8-byte-chunks from fake, and turn them into chars in real_bin.
-    auto bytes_tran = huff_to_bin(fake_bin_buff, real_bin_buff);
+    for (;;) {
+        // read as many bytes as you can into fake_bin_buff
+        auto bytes_read = file_to_huff(infile, fake_bin_buff);
 
-    cout << bytes_read << " " << bytes_tran << endl;
-    // clears out the transferred memory.
-    // there must be a better way of thinking about buffers...
-    fake_bin_buff.reset();
+        // take as many 8-byte-chunks from fake, and turn them into chars in real_bin.
+        auto bytes_tran = huff_to_bin(fake_bin_buff, real_bin_buff);
 
-    // only write to the file if the binary buffer is full
-    if (real_bin_buff.room() == 0) {
-        outfile.write(real_bin_buff.data(), buffsize);
+        cout << bytes_read << " " << bytes_tran << endl;
+        // clears out the transferred memory.
+        // there must be a better way of thinking about buffers...
+        fake_bin_buff.reset();
+
+        // only write to the file if the binary buffer is full
+        if (real_bin_buff.room() == 0) {
+            outfile.write(real_bin_buff.data(), buffsize);
+            real_bin_buff.reset();
+        }
+
+        // this is sort of the ``final condition'': all we have is some scrap bits left
+        // in the fake_bin_buff, and room to put them in real_bin_buff (presumably enforced
+        // by the outfile.write statement.
+        if (infile.eof() && fake_bin_buff.used() < 8 && real_bin_buff.room() > 0) {
+            cout << "in final position" << endl;
+        }
     }
-
 }
 
 
