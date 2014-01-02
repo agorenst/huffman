@@ -2,10 +2,17 @@
 #include <array>
 #include <map>
 #include <cmath>
+#include <fstream>
 
-#include "new_huffman.h"
+#include "huffman.h"
 
 using namespace std;
+
+const int numsymbs = 256;
+vector<string> encodings(numsymbs,"");
+vector<double> freqs(numsymbs,0);
+vector<unsigned> hist(numsymbs,0);
+
 
 /* to facilitate encoding and decoding, we have to:
  *   load data into a buffer
@@ -16,7 +23,7 @@ using namespace std;
 // maybe rename to "feed buffer".
 // Really two stages, if one wants to be consistent
 template<class T, unsigned S>
-class buffer : public array<T, S> {
+class feed_buffer : public array<T, S> {
     private:
     unsigned next_empty = 0;
     unsigned consumed = 0;
@@ -61,7 +68,7 @@ const unsigned char_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (th
 // This returns the number of characters read from in.
 // The number of bytes written to fake_bin_buff can be computed separately
 // via the "room" method.
-unsigned file_to_huff(istream& in, buffer<char, buffsize>& fake_bin_buff, map<string,string>& hmap) {
+unsigned file_to_huff(istream& in, feed_buffer<char, buffsize>& fake_bin_buff) {
     for (int i = 0; ; ++i) {
         char to_encode = in.peek();
 
@@ -69,7 +76,7 @@ unsigned file_to_huff(istream& in, buffer<char, buffsize>& fake_bin_buff, map<st
         if (in.eof()) { return i; }
 
         // otherwise, try to save the encoding of that character into the buffer
-        string encoding = hmap[string(to_encode,1)];
+        string encoding = encodings[to_encode];
         if (fake_bin_buff.room() >= encoding.size()) {
             fake_bin_buff.append(encoding.c_str(), encoding.size());
             in.get(to_encode); // really we're 'popping' here.
@@ -98,7 +105,7 @@ char trans_bin_string(const char a[char_size]) {
 // given a ``fake binary buffer'' (really, an array of characters {'0', '1'}), convert those
 // characters into real binary and save that encoding in real_bin_buff
 // This is *very* machine specific, we assume bytes = 8 bits, endian stuff (??).
-unsigned huff_to_bin(buffer<char, buffsize>& fake_bin_buff, buffer<char, buffsize>& real_bin_buff) {
+unsigned huff_to_bin(feed_buffer<char, buffsize>& fake_bin_buff, feed_buffer<char, buffsize>& real_bin_buff) {
     char to_trans[char_size]; // this holds the next 8 chars in fake_bin_buff to be compressed to a single byte.
     for (int i = 0; ; ++i) {
 
@@ -122,12 +129,13 @@ unsigned huff_to_bin(buffer<char, buffsize>& fake_bin_buff, buffer<char, buffsiz
 }
 
 // the hard part is dealing with the edge cases---essentially, what if 
-void write_compressed_file(istream& infile, ostream& outfile)
+void write_compressed_file(istream& infile, ostream& outfile) {
     // we declare some necessary buffers.
-    buffer<char, buffsize> fake_bin_buff, real_bin_buff;
+    feed_buffer<char, buffsize> fake_bin_buff;
+    feed_buffer<char, buffsize> real_bin_buff;
     
     // read as many bytes as you can into fake_bin_buff
-    auto bytes_read = file_to_huff(infile, fake_bin_buff, hmap);
+    auto bytes_read = file_to_huff(infile, fake_bin_buff);
 
     // take as many 8-byte-chunks from fake, and turn them into chars in real_bin.
     auto bytes_tran = huff_to_bin(fake_bin_buff, real_bin_buff);
@@ -144,11 +152,7 @@ void write_compressed_file(istream& infile, ostream& outfile)
 
 }
 
-const int numsymbs = 256;
 
-vector<string> encodings(numsymbs,"");
-vector<double> freqs(numsymbs,0);
-vector<unsigned> hist(numsymbs,0);
 
 // read through the file.
 void compute_freqs(istream& in) {
@@ -171,9 +175,11 @@ int main(int argc, char* argv[]) {
     }
 
     // this block computes frequency.
+    // why a block? mainly so freq_computer is destroyed,
+    // closing the file nicely. Probably restructured soon.
     {
         ifstream freq_computer;
-        freq_computer.open(argv[1], 'r');
+        freq_computer.open(argv[1]);
         compute_freqs(freq_computer);
     }
 
@@ -182,9 +188,9 @@ int main(int argc, char* argv[]) {
 
     ifstream input_to_compress;
     // we open the input file twice---dumb!
-    input_to_compress.open(argv[1], 'r');
+    input_to_compress.open(argv[1]);
     ofstream compressed;
-    compressed.open(argv[2], "wb");
+    compressed.open(argv[2], ofstream::binary);
 
     write_compressed_file(input_to_compress, compressed);
 

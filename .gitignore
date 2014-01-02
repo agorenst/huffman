@@ -1,7 +1,7 @@
 *~
 huffman
 new_huffman
-new_huffman.o
+*.o
 new_huffman_driver
 huffman_encode
 inputs/*

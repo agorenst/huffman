@@ -1,118 +1,72 @@
 #include "huffman.h"
 
-#include <list>
+#include <string>
+#include <vector>
 #include <queue>
+#include <stack>
+#include <tuple>
 
-#include <iostream>
+#include <memory>
 
 using namespace std;
-using namespace huffman;
 
-
-// this local class is critical: it implements the < operator
-// correctly.
-// Note that a priority_queue will work with shared_ptr, it just
-// won't make sense (ie the ordering is arbitrary)
-//
-// also encapsulates "new" commands.
-struct managed_htree : public std::shared_ptr<htree> {
-    bool operator<(const managed_htree& h) const {
-        return (*this)->e < h->e;
-    }
-    managed_htree(const encoding e): shared_ptr<htree>(new htree(e)) {}
-    managed_htree(managed_htree l, managed_htree r): shared_ptr<htree>(new htree(l,r)) {}
+struct htree {
+    const shared_ptr<htree> l, r;
+    const double w;
+    const unsigned i;
+    htree(double w, unsigned i): w(w), i(i) {}
+    htree(shared_ptr<htree> l, shared_ptr<htree> r):
+        l(l), r(r), w(l->w + r->w), i(-1) {}
+    bool is_leaf() const { return l == NULL; }
 };
 
-
-
-/*
- * See huffman.h for any unclear data structures.
- * This just contains the two "main" algorithms:
- * build_tree: given a range of encodings, build a huffman tree
- * build_code: given a huffman code, build a string->string map
- * defining the encoding.
- *
- * NB: because build_tree is a template in a cpp file, we have to
- * explicitly instantiate it for each type we'd like.
- * Given the tiny size of all this program and everything, it seems unecessary,
- * but for larger programs this (and extern template) are all rather important.
- *
- * This is, of course, a C++-related note, nothing to do with the algorithm.
- *
- */
-
-/* THE MAIN ALGORITHM */
-
-// A lot of the "magic" happens thanks to the fact
-// that the priority queue works correctly:
-// hence (partly) the need for managed_htree class.
-template<class iter>
-shared_ptr<htree> huffman::build_tree(iter start, iter end) {
-
-
-    // this work-queue holds our forest of trees.
-    priority_queue<managed_htree> wq;
-
-    // we initialize the forest to n size-1 (ie, leaves)
-    // trees.
-    for (auto it = start; it != end; ++it) {
-        wq.push(managed_htree(*it));
+struct cmp_ptr{
+    bool operator()(const shared_ptr<htree>& l, const shared_ptr<htree>& r) {
+        return l->w > r->w;
     }
+};
 
-    // here is the greedy algorithm: we combine the two
-    // cheapest trees (be them size 1 or greater) into
-    // a new tree, and put that back on the queue.
-    // NB: the runtime is not as obvious from this structure as a for loop!
-    // However, we see that wq.size() decreases by 1 each time.
-    while (wq.size() > 1) {
-        auto min1 = wq.top(); wq.pop();
-        auto min2 = wq.top(); wq.pop();
-        wq.push(managed_htree(min1,min2));
-    }
-    return wq.top();
-}
+//shared_ptr<htree> build_tree
 
-// we use templates---extend as necessary (according to
-// http://stackoverflow.com/questions/115703/storing-c-template-function-definitions-in-a-cpp-file) can't do better than this.
-template
-shared_ptr<htree> huffman::build_tree<list<encoding>::iterator>
-(list<encoding>::iterator start, list<encoding>::iterator end);
+void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
+    typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
 
+    vector<char> codeword(encodings.size());
+    stack<tree_state> tovisit;
 
+    // start DFS (we have to do DFS)
+    tovisit.push(tree_state(h, 0, false));
 
-
-/* THE SECOND (MUNDANE) PART OF THE ALGORITHM:
- * given a fully-built huffman tree, actually make the 
- * mapping between strings and their binary code.
- *
- * We use a queue to explore the tree---recursion would
- * be theoretically nicer, but this is C++.
- */
-map<string,string> huffman::build_code(shared_ptr<htree> h) {
-    typedef pair<shared_ptr<htree>, string> tree_state;
-
-    // we ultimately map leaves of h to "binary" strings.
-    map<string, string> code;
-
-    // we're doing a BFS exploration of h.
-    // at each node we save the node location (shared_ptr<htree>)
-    // and the currently-built codeword (string), hence tree_state definition
-    queue<tree_state> tovisit;
-
-    // start the BFS
-    tovisit.push(tree_state(h,""));
     while(tovisit.size()) {
-        auto nxt = tovisit.front(); tovisit.pop();
-        auto node = nxt.first;
-        auto word = nxt.second;
+        auto nxt = tovisit.top(); tovisit.pop();
+        auto node = get<0>(nxt);
+        auto len =  get<1>(nxt);
+        auto left = get<2>(nxt);
+        if (len > 0) { codeword[len-1] = left ? '0' : '1'; }
 
         if (node->is_leaf()) {
-            code[node->e.first] = word;
+            encodings[node->i] = string(codeword.begin(), codeword.begin()+len);
         }
         else {
-            tovisit.push(tree_state(node->l,word+'0'));
-            tovisit.push(tree_state(node->r,word+'1'));
+            tovisit.push(tree_state(node->l,len+1,true));
+            tovisit.push(tree_state(node->r,len+1,false));
         }
     }
-    return code;
+}
+
+void huffman_encode(const vector<pair<string,double>>& freqs, vector<string>& encodings) {
+    priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
+    for (auto i = 0; i < freqs.size(); ++i) {
+        wq.emplace(new htree(freqs[i].second, i));
+    }
+
+    while(wq.size() > 1) {
+        auto min1 = wq.top(); wq.pop();
+        auto min2 = wq.top(); wq.pop();
+        wq.emplace(new htree(min1,min2));
+    }
+
+
+    // this generates the encodings
+    generate_encodings(wq.top(), encodings);
 }
