@@ -6,6 +6,4 @@
 
 void huffman_encode(const std::vector<double>& freqs, std::vector<std::string>& out);
 
-void huffman_encode(const std::vector<std::pair<std::string,double>>& freqs, std::vector<std::string>& out);
-
 #endif

@@ -26,8 +26,6 @@ struct cmp_ptr{
     }
 };
 
-//shared_ptr<htree> build_tree
-
 void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
     typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
 
@@ -54,10 +52,12 @@ void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
     }
 }
 
-void huffman_encode(const vector<pair<string,double>>& freqs, vector<string>& encodings) {
+void huffman_encode(const vector<double>& freqs, vector<string>& encodings) {
     priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
+
+    // recall the wq really stores shared_ptrs, so this "new" stuff is safe.
     for (auto i = 0; i < freqs.size(); ++i) {
-        wq.emplace(new htree(freqs[i].second, i));
+        wq.emplace(new htree(freqs[i], i));
     }
 
     while(wq.size() > 1) {
