@@ -1,10 +1,9 @@
 #include <iostream>
-#include <array>
-#include <map>
 #include <cmath>
 #include <fstream>
 
 #include "huffman.h"
+#include "feed_buffer.h"
 
 using namespace std;
 
@@ -14,58 +13,11 @@ vector<double> freqs(numsymbs,0);
 vector<unsigned> hist(numsymbs,0);
 
 
-/* to facilitate encoding and decoding, we have to:
- *   load data into a buffer
- *   transform that data into intermediate form (fake binary)
- *   transform that intermediate form into real binary
- */
-
-// maybe rename to "feed buffer".
-// Really two stages, if one wants to be consistent
-template<class T, unsigned S>
-class feed_buffer : public array<T, S> {
-    private:
-    unsigned next_empty = 0;
-    unsigned consumed = 0;
-    public:
-
-    // invariant: S >= next_empty
-    unsigned room() const { return S - next_empty; }
-    unsigned toread() const { return next_empty - consumed; }
-    unsigned used() const { return next_empty; }
-
-    // invariant (assumption must be maintained by user: room() >= l
-    void append(const T* a, unsigned l) { 
-        for (unsigned i = 0; i < l; ++i) {
-            push(a[i]);
-        }
-    }
-
-    // invariant: next_empty - consumed > 0;
-    T& pop() {
-        ++consumed;
-        return (*this)[consumed-1];
-    }
-
-    void push(const T& d) {
-        (*this)[next_empty++] = d;
-    }
-
-    void reset() {
-        copy(array<T,S>::begin()+consumed, array<T,S>::begin()+next_empty, array<T,S>::begin());
-        next_empty -= consumed;
-        consumed = 0;
-    }
-};
 
 const int buffsize = 4096;
 const unsigned char_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (the character).
 
-unsigned feed_huff_buff(istream& in, feed_buffer<char, buffsize>& huff_buff) {
-
-}
-
-// this takes in a file, a buffer, and a huffman encoding map.
+// this takes in a file and a buffer
 // we read in a character from the infile, look up its encoding,
 // and save that encoding into the buffer.
 // (This assumes that the encoding is all character-based, etc. etc.
@@ -73,27 +25,27 @@ unsigned feed_huff_buff(istream& in, feed_buffer<char, buffsize>& huff_buff) {
 // This returns the number of characters read from in.
 // The number of bytes written to fake_bin_buff can be computed separately
 // via the "room" method.
-unsigned file_to_huff(istream& in, feed_buffer<char, buffsize>& fake_bin_buff) {
-    for (int i = 0; ; ++i) {
-        char to_encode = in.peek();
-
-        // hooray, we're done!
+unsigned feed_huff_buff(istream& in, feed_buffer<char, buffsize>& huff_buff) {
+    // we keep track of how much we've written.
+    for (unsigned i = 0; ; ++i) {
         if (in.eof()) { return i; }
 
-        // otherwise, try to save the encoding of that character into the buffer
+        char to_encode = in.peek();
         string encoding = encodings[to_encode];
-        if (fake_bin_buff.room() >= encoding.size()) {
-            fake_bin_buff.append(encoding.c_str(), encoding.size());
-            in.get(to_encode); // really we're 'popping' here.
+
+        // if we have room for this encoding (may depend on value of to_encode)
+        if (huff_buff.room() >= encoding.size()) {
+            for (auto& c : encoding) {
+                huff_buff.push(c);
+            }
+            in.get(to_encode); // pop! remove char from infile.
         }
-        // if the buffer doesn't have room, we're done.
         else {
+            // if huff_buff is ``full'' (or close to it), we're done.
             return i;
         }
     }
 }
-
-
 
 // surely there's some fancy bit twiddling we can do,
 // but this is conceptually easier.
@@ -110,67 +62,104 @@ char trans_bin_string(const char a[char_size]) {
 // given a ``fake binary buffer'' (really, an array of characters {'0', '1'}), convert those
 // characters into real binary and save that encoding in real_bin_buff
 // This is *very* machine specific, we assume bytes = 8 bits, endian stuff (??).
-unsigned huff_to_bin(feed_buffer<char, buffsize>& fake_bin_buff, feed_buffer<char, buffsize>& real_bin_buff) {
-    char to_trans[char_size]; // this holds the next 8 chars in fake_bin_buff to be compressed to a single byte.
+unsigned feed_bin_buff(feed_buffer<char, buffsize>& huff_buff, feed_buffer<char, buffsize>& bin_buff) {
+    char to_trans[char_size];
     for (int i = 0; ; ++i) {
-
-        // if there's not enough bytes to translate
-        if (fake_bin_buff.toread() < char_size) {
-            return i; 
-        }
         
-        // if there's no room to store a new char
-        if (real_bin_buff.room() == 0) {
+        // if we don't have enough bits to make a char, we're done
+        if (huff_buff.remaining_data() < char_size) {
             return i;
         }
-
-        // this is the actual put-into-buff part.
+        // if our output buffer is full, we're done.
+        if (bin_buff.room() == 0) {
+            return i;
+        }
         for (unsigned j = 0; j < char_size; ++j) {
-            to_trans[j] = fake_bin_buff.pop();
+            to_trans[j] = huff_buff.pop();
         }
         char bin_byte = trans_bin_string(to_trans);
-        real_bin_buff.push(bin_byte);
+        bin_buff.push(bin_byte);
     }
+}
+
+// this simply pads the remaining data in huff_buff with 0s,
+// brining the bit count up to 8.
+// Padding with zeros is safe because of the prefix-free nature
+// ---if we simply know to stop parsing the compressed file after
+// x characters, we're good.
+void resolve_last_byte(feed_buffer<char, buffsize>& huff_buff,
+                       feed_buffer<char, buffsize>& bin_buff) {
+    if (huff_buff.remaining_data() == 0) { return; }
+    assert(huff_buff.remaining_data() < char_size);
+    assert(bin_buff.room() > 0);
+
+    // just pad with zeros and dump it to bin_buff
+    while (huff_buff.room() < char_size) {
+        huff_buff.push('0');
+    }
+    huff_to_bin(huff_buff, bin_buff);
+    assert(huff_buff.remaining_data() == 0);
 }
 
 // the hard part is dealing with the edge cases---essentially, what if 
 void write_compressed_file(istream& infile, ostream& outfile) {
     // we declare some necessary buffers.
-    feed_buffer<char, buffsize> fake_bin_buff;
-    feed_buffer<char, buffsize> real_bin_buff;
+    feed_buffer<char, buffsize> huff_buff, bin_buff;
     
 
-    for (;;) {
+    while (!infile.eof()) {
         // read as many bytes as you can into fake_bin_buff
-        auto bytes_read = file_to_huff(infile, fake_bin_buff);
+        auto bytes_read = feed_huff_buff(infile, huff_buff);
+        // after this command, presumably huff_buff is ``full'' (or close to it).
+        
+        // take 8-byte-chunks from huff, and turn them into chars in bin_buff
+        auto bytes_tran = huff_to_bin(huff_buff, bin_buff);
+        // having emptied (or almost emptied) the huff_buff, we realign.
+        huff_buff.realign();
 
-        // take as many 8-byte-chunks from fake, and turn them into chars in real_bin.
-        auto bytes_tran = huff_to_bin(fake_bin_buff, real_bin_buff);
-
+        // the first number should be much larger than the second
         cout << bytes_read << " " << bytes_tran << endl;
-        // clears out the transferred memory.
-        // there must be a better way of thinking about buffers...
-        fake_bin_buff.reset();
 
         // only write to the file if the binary buffer is full
-        if (real_bin_buff.room() == 0) {
-            outfile.write(real_bin_buff.data(), buffsize);
-            real_bin_buff.reset();
+        if (bin_buff.room() == 0) {
+            outfile.write(bin_buff.data(), bin_buff.remaining_data());
+            // because we use file writing with a buffer,
+            // we must realign ASAP!
+            bin_buff.clear();
         }
-
-        // this is sort of the ``final condition'': all we have is some scrap bits left
-        // in the fake_bin_buff, and room to put them in real_bin_buff (presumably enforced
-        // by the outfile.write statement.
-        if (infile.eof() && fake_bin_buff.used() < 8 && real_bin_buff.room() > 0) {
-            cout << "in final position" << endl;
-        }
+        // NB: there may be a really weird boundary condition
+        // when there are encodings close-to-buffsize, in
+        // which we may never progress. Characterizing this would be
+        // a useful, albeit boring, step.
+        // Presumably this will be rare, however.
     }
+
+    // at this point we have consumed the infile.
+    // there may be a lot of data left over in huff_buff and bin_buff,
+    // so we preliminarily empty them.
+    huff_to_bin(huff_buff, bin_buff);
+    outfile.write(bin_buff.data(), bin_buff.remaining_data());
+    bin_buff.clear();
+
+    // at this point bin_buff is empty, and presumably can't be filled
+    // by whatever remains of huff_buff.
+    huff_to_bin(huff_buff, bin_buff);
+    assert(huff_buff.remaining_data() < 8);
+    assert(bin_buff.room() > 0);
+
+    // we need to "cap" the bin_buff before the final write to the file,
+    // so we've encoded the last bits.
+    resolve_last_byte(huff_buff, bin_buff);
+
+    outfile.write(bin_buff.data(), bin_buff.remaining_data());
+    // realign is needless---we should be all set.
 }
 
 
 
 // read through the file.
-void compute_freqs(istream& in) {
+// returns the number of bytes read.
+unsigned compute_freqs(istream& in) {
     unsigned total = 0;
     while (!in.eof()) {
         unsigned char a = in.get();
@@ -180,6 +169,21 @@ void compute_freqs(istream& in) {
     for (int i = 0; i < numsymbs; ++i) {
         freqs[i] = static_cast<double>(hist[i])/
                    static_cast<double>(total);
+    }
+    return total;
+}
+
+unsigned load_compressed_data(istream& data) {
+    unsigned total;
+}
+
+// when we compress file.in, we generate data.out and comp.out.
+// data.out contains plaintext version of our encoding data.
+// Obviously this should all be in one compressed file, but, baby steps.
+void save_encoding_data(ostream& datafile, unsigned size) {
+    datafile << size << endl;
+    for (const auto& enc : encodings) {
+        datafile << enc << endl;
     }
 }
 
