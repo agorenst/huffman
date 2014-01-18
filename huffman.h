@@ -1,60 +1,45 @@
 #ifndef _NEW_HUFFMAN_H_
 #define _NEW_HUFFMAN_H_
 
-#include <string>
 #include <vector>
 #include <memory>
+#include <iostream>
 
-class enc_tree {
-    private:
-        shared_ptr<enc_tree> l = NULL;
-        shared_ptr<enc_tree> r = NULL;
-        const int index = -1;
-    public:
-        void insert(string s, unsigned i) {
-            // if the string is empty, then we should be
-            // inserting it into a new node, not an already-existing one.
-            assert (s.size() > 0);
-            auto choice = *(s.begin());
-            assert (choice == '0' || choice == '1');
+/* the htree object is a tree which stores in its leaves indices
+ * to the symbols */
+struct htree {
 
-            // we ``pop'' the string, to give it to our child.
-            string next_string(s.begin()+1,s.end());
+    // not constant because of read_htree;
+    std::shared_ptr<htree> l, r;
+    const double w;
+    int i;
 
-            // the index should be inserted left or right.
-            auto& child = choice == '0' ? l : r;
-            if (choice == '0') {
-                if (child == NULL) {
-                    child = new enc_tree(next_string, i);
-                }
-                else {
-                    child.insert(next_string);
-                }
-            }
-        }
-        enc_tree(string& s, unsigned i) {
-            if (s == "") {
-                l = r = NULL;
-                index = i;
-            }
-            else {
-                auto choice = *(s.begin());
-                assert (choice == '0' || choice == '1');
-                string next_string(s.begin()+1,s.end());
-                auto& child = choice == '0' ? l : r;
-                child = new enc_tree(next_string, i);
-            }
-        }
-        void lookup(unsigned i, string& s) const {
-            if (s.size == 0) {
-                assert(i >= 0);
-                assert(l == r && l == NULL);
-                return i;
-            }
-            auto choice = *(s.begin());
-        }
+    
+    // leaf: it stores an index to the symbol (i), and the freq (w)
+    htree(double w, unsigned i): w(w), i(i) {}
+
+    // node: it has weight equal to its children, and no symbol (i)
+    htree(std::shared_ptr<htree> l, std::shared_ptr<htree> r):
+        l(l), r(r), w(l->w + r->w), i(-1) {}
+
+    // we check both children because read_htree builds things iteratively.
+    bool is_leaf() const { return l == NULL && r == NULL; }
+
+    // defined because of read_htree
+    htree(): l(NULL), r(NULL), w(0), i(-1) {}
+    
+//    ~htree() {
+//        std::cerr << "htree being deleted" << std::endl;
+//    }
 };
 
-void huffman_encode(const std::vector<double>& freqs, std::vector<std::string>& out);
+std::shared_ptr<htree> generate_tree(const std::vector<double>& freqs);
+
+void write_htree(const std::shared_ptr<htree> h, std::ostream& o);
+
+// this builds an htree, but doesn't fill in the weights (w).
+// so be wary?
+std::shared_ptr<htree> read_htree(std::istream& in);
+
 
 #endif
