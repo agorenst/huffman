@@ -165,7 +165,7 @@ class decode_buffer {
 };
 
 void decode(istream& infile, ostream& outfile) {
-    const int bytes_to_write = 16;
+    const int bytes_to_write = 3181104-1;
     int written = 0;
     decode_buffer huffbuff;
 

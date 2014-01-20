@@ -1,5 +1,5 @@
 driver: driver.cpp huffman.o
-	clang++ -Wall -g -std=c++11 driver.cpp huffman.o -o driver
+	clang++ -Wall -g -std=c++11 driver.cpp huffman.o -o huffman
 
 
 huffman.o: huffman.cpp huffman.h
@@ -7,4 +7,4 @@ huffman.o: huffman.cpp huffman.h
 
 
 clean:
-	rm -f *~ *.o
+	rm -f *~ *.o huffman
