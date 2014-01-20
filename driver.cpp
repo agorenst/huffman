@@ -165,7 +165,7 @@ class decode_buffer {
 };
 
 void decode(istream& infile, ostream& outfile) {
-    const int bytes_to_write = 3181104-1;
+    const int bytes_to_write = 610158-1;
     int written = 0;
     decode_buffer huffbuff;
 
@@ -242,15 +242,23 @@ int main(int argc, char* argv[]) {
         write_htree(tree, cout);
         cout << endl;
     }
+    else if (argc == 3 && strncmp(argv[1], "-p",2) == 0) {
+        ifstream tree_file(argv[2]);
+        hufftree = read_htree(tree_file);
+        generate_encodings(hufftree, encodings);
+        for (int b = 0; b < numsymbs; ++b) {
+            if (encodings[b] != "") {
+                cout << b << " " << encodings[b] << endl;
+            }
+        }
+    }
     else if (argc == 3 && strncmp(argv[1], "-c",2) == 0) {
-        cerr << "Compressing!" << endl;
         ifstream tree_file(argv[2]);
         hufftree = read_htree(tree_file);
         generate_encodings(hufftree, encodings);
         encode(cin, cout);
     }
     else if (argc == 3 && strncmp(argv[1], "-d",2) == 0) {
-        cerr << "Decompressing!" << endl;
         ifstream tree_file(argv[2]);
         hufftree = read_htree(tree_file);
         decode(cin, cout);
