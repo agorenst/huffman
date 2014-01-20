@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <iostream>
+#include <string>
 
 /* the htree object is a tree which stores in its leaves indices
  * to the symbols */
@@ -41,5 +42,6 @@ void write_htree(const std::shared_ptr<htree> h, std::ostream& o);
 // so be wary?
 std::shared_ptr<htree> read_htree(std::istream& in);
 
+void generate_encodings(const std::shared_ptr<htree> h, std::vector<std::string>& encodings);
 
 #endif

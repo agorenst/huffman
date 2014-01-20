@@ -111,3 +111,29 @@ shared_ptr<htree> read_htree(std::istream& in) {
         }
     }
 }
+
+void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
+    typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
+
+    vector<char> codeword(encodings.size());
+    stack<tree_state> tovisit;
+
+    // start DFS (we have to do DFS)
+    tovisit.push(tree_state(h, 0, false));
+
+    while(tovisit.size()) {
+        auto nxt = tovisit.top(); tovisit.pop();
+        auto node = get<0>(nxt);
+        auto len =  get<1>(nxt);
+        auto left = get<2>(nxt);
+        if (len > 0) { codeword[len-1] = left ? '0' : '1'; }
+
+        if (node->is_leaf()) {
+            encodings[node->i] = string(codeword.begin(), codeword.begin()+len);
+        }
+        else {
+            tovisit.push(tree_state(node->l,len+1,true));
+            tovisit.push(tree_state(node->r,len+1,false));
+        }
+    }
+}

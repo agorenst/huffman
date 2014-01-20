@@ -10,14 +10,14 @@ using namespace std;
 
 // we treat each 8-bit char as a symbol
 const int numsymbs = 256;
-//vector<string> encodings(numsymbs,"");
+vector<string> encodings(numsymbs,"");
 vector<double> freqs(numsymbs,0);
 vector<unsigned> hist(numsymbs,0);
 //
 //
 //
-//const int buffsize = 4096;
-//const unsigned char_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (the character).
+const int buffsize = 4096;
+const unsigned char_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (the character).
 //
 //// this takes in a file and a buffer
 //// we read in a character from the infile, look up its encoding,
@@ -174,22 +174,41 @@ unsigned compute_freqs(istream& in) {
     }
     return total;
 }
-//
-//unsigned load_compressed_data(istream& data) {
-//    unsigned total;
-//}
-//
-//// when we compress file.in, we generate data.out and comp.out.
-//// data.out contains plaintext version of our encoding data.
-//// Obviously this should all be in one compressed file, but, baby steps.
-//void save_encoding_data(ostream& datafile, unsigned size) {
-//    datafile << size << endl;
-//    for (const auto& enc : encodings) {
-//        datafile << enc << endl;
-//    }
-//}
 
-enum MODE { FREQ, COMP, DECOMP };
+class decoder_buffer {
+    private:
+    bitset<buffsize> m;
+    unsigned next_empty = 0;
+    unsigned datasize() {
+        return next_empty;
+    }
+    unsigned room() {
+        assert(buffsize > nextempty);
+        // if we have written 100 bytes, then
+        // nextempty is at slot 99.
+        return buffsize - (nextempty+1);
+    }
+    public:
+    bool canstore(char c) const {
+        auto size = encodings[c].size();
+        return size <= room();
+    }
+    char popchar() {
+        if (datasize() >= 8) {
+            char c = 0;
+
+        }
+    }
+    char terminate() {
+        return 'c';
+    }
+    char pushsymb(char c) {
+        return 'c';
+    }
+};
+
+
+
 const string usage_string = "Usage: ./huffman -e < file > encoding_description\n"
                             "       ./huffman -c encoding_description < orig_file > compression\n"
                             "       ./huffman -d encoding_description < compression > orig_file\n";
@@ -207,8 +226,7 @@ int main(int argc, char* argv[]) {
         cerr << "Compressing!" << endl;
         ifstream tree_file(argv[2]);
         auto tree = read_htree(tree_file);
-        cerr << "Done reading in tree" << endl;
-        write_htree(tree, cout);
+        generate_encodings(tree, encodings);
     }
     else {
         cout << usage_string;
