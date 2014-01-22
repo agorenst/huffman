@@ -86,9 +86,12 @@ void decode(istream& infile, ostream& outfile, const int bytes_to_write=4264316)
 
         bool buffer_has_results = true;
         while(buffer_has_results) {
-            byte c;
+            // technically this is an index, but we use it as a char
+            int index;
 
-            buffer_has_results = huffbuff.pop_byte(c);
+            buffer_has_results = huffbuff.pop_byte(index);
+            byte c(index); 
+
             
             if (buffer_has_results) {
                 outfile.put(c);
@@ -111,7 +114,7 @@ unsigned compute_freqs(istream& in, vector<double>& freqs) {
         hist[a] += 1;
         total += 1;
     }
-    for (int i = 0; i < freqs.size(); ++i) {
+    for (unsigned i = 0; i < freqs.size(); ++i) {
         freqs[i] = static_cast<double>(hist[i])/
                    static_cast<double>(total);
     }
@@ -141,7 +144,7 @@ int main(int argc, char* argv[]) {
         tree_file >> bytecount;
         hufftree = read_htree(tree_file);
         generate_encodings(hufftree, encodings);
-        for (int b = 0; b < encodings.size(); ++b) {
+        for (unsigned b = 0; b < encodings.size(); ++b) {
             // if symbol with index b is not in the file,
             // we may choose to not include it in our huffman
             // tree

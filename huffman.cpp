@@ -25,10 +25,14 @@ shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
     priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
 
     // recall the wq really stores shared_ptrs, so this "new" stuff is safe.
-    for (auto i = 0; i < freqs.size(); ++i) {
+    // THIS WAS CHANGED because g++ caused terrible, terrible issues.
+    // Maybe I didn't fully understand what I was doing... but even valgrind didn't
+    // report issues when running the old code with clang++
+    for (unsigned i = 0; i < freqs.size(); ++i) {
         // this IF statement works so long as we don't have rounding errors, haha.
         //if (freqs[i] > 0) {
-        wq.emplace(new htree(freqs[i], i));
+        shared_ptr<htree> to_insert(new htree(freqs[i], i));
+        wq.push(to_insert);
         //}
     }
 

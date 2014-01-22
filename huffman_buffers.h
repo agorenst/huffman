@@ -14,15 +14,15 @@ class encode_buffer {
         // our actual buffer
         std::array<bool,buffsize> m;
         
-        unsigned next_empty = 0;
 
         std::vector<std::string> encodings;
+        unsigned next_empty;// = 0;
     public:
 
 
         // the constructor essentially initializes its huffman encoding table.
         encode_buffer(const unsigned numsymb, const std::shared_ptr<htree> h):
-            encodings(numsymb,"") {
+            encodings(numsymb,""), next_empty(0) {
             generate_encodings(h, encodings);
         }
 
@@ -43,13 +43,16 @@ class encode_buffer {
 class decode_buffer {
     public:
         std::array<bool,buffsize> m;
-        unsigned next_empty = 0;
+        unsigned next_empty;// = 0;
+        unsigned first_data;// = 0; 
         const std::shared_ptr<htree> hufftree;
+        void slide_array();
     public:
-        decode_buffer(const unsigned numsymb, const std::shared_ptr<htree> h): hufftree(h) {}
+        decode_buffer(const unsigned numsymb, const std::shared_ptr<htree> h):
+            next_empty(0), first_data(0), hufftree(h) {}
 
         bool put_byte(const byte b);
-        bool pop_byte(byte& b);
+        bool pop_byte(int& b);
 };
 
 // this "works", from my ad-hoc testing. That outputs 17, for instansce.
