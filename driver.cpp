@@ -6,85 +6,30 @@
 #include <cassert>
 
 #include "huffman.h"
-//#include "feed_buffer.h"
+#include "huffman_buffers.h"
 
 using namespace std;
 
-// we treat each 8-bit char as a symbol
-const int numsymbs = 256;
-vector<string> encodings(numsymbs,"");
-shared_ptr<htree> hufftree;
-vector<double> freqs(numsymbs,0);
-vector<unsigned> hist(numsymbs,0);
-const int buffsize = 4096;
-const unsigned byte_size = 8; // we translate, eg, "01001000" into 8+64 = 72 (the character).
-
+// Our core system assumptions are that an unsigned
+// character is an 8-bit pattern, where
+// unsigned char b = 0 -> b == 00000000.
+// As our "alphabet" for huffman encoding is also
+// the 256 possible 8-bit patters, we abuse notation
+// and let the index
 typedef unsigned char byte;
+// we treat each 8-bit char as a symbol
+// this can change, thanks to our indexing model.
+const int numsymbs = 256;
 
-class bit_to_byte_masks : public array<byte, 8> {
-    public:
-    bit_to_byte_masks() {
-        for (auto i = 0; i < 8; ++i) {
-            (*this)[i] = 1 << i;
-        }
-    }
-};
 
-bit_to_byte_masks masks;
+// This is a global variable because everything uses
+// exactly one huffman tree, so why pass it all over
+// the place.
+shared_ptr<htree> hufftree;
 
-byte bits_to_byte(const array<bool,buffsize>& b, const unsigned n = 8) {
-    // i hope this is an actual all-zero pattern.
-    byte d = 0;
-    for (int i = 0; i < n; ++i) {
-        if (b[i]) {
-            d |= masks[i];
-        }
-    }
-    return d;
-}
-
-class encode_buffer {
-    public:
-        // default constructor...?
-        array<bool,buffsize> m;
-        unsigned next_empty = 0;
-    public:
-        bool put_byte(const byte b) {
-            if (encodings[b].size() < (buffsize - next_empty)) {
-                for (auto& c : encodings[b]) {
-                    m[next_empty++] = c == '1';
-                }
-                return true;
-            }
-            return false;
-        }
-        bool pop_byte(byte& b) {
-            // eg, if next_empty is 8, then [0..7] is defined, and that's a bytee
-            if (byte_size <= next_empty) {
-                b = bits_to_byte(m);
-                // having now popped the first 8 bits into b, we must
-                // slide our memory back (not efficient! i know...)
-                copy(m.begin()+byte_size, m.begin()+next_empty, m.begin());
-                next_empty -= 8;
-                return true;
-            }
-            return false;
-        }
-
-        // only use when contents < 8!
-        bool terminate(byte& b) {
-            // we have 7 or fewer bits...
-            if (next_empty < byte_size) {
-                b = bits_to_byte(m, next_empty);
-                next_empty = 0;
-                return true;
-            }
-            return false;
-        }
-};
 
 void encode(istream& infile, ostream& outfile) {
-    encode_buffer huffbuff;
+    encode_buffer huffbuff(numsymbs, hufftree);
 
     while(!infile.eof()) {
         bool buffer_has_room = true;
@@ -112,7 +57,7 @@ void encode(istream& infile, ostream& outfile) {
     }
 
     assert(infile.eof());
-    assert(huffbuff.next_empty < byte_size);
+    //assert(huffbuff.next_empty < byte_size);
 
     byte c;
 
@@ -121,53 +66,10 @@ void encode(istream& infile, ostream& outfile) {
     outfile.put(c);
 }
 
-class decode_buffer {
-    public:
-        // default constructor...?
-        array<bool,buffsize> m;
-        unsigned next_empty = 0;
-    public:
-        bool put_byte(const byte b) {
-            // if buffsize is 256 (say), then
-            // the last index is 255, and say we have next_empty = 248,
-            // then 248, 249, 250, 251, 252, 253, 254, 255 are empty.
-            // and 256-248 = 8
-            if (buffsize - next_empty >= byte_size) {
-                for (auto i = 0; i < byte_size; ++i) {
-                    // i think this works...?
-                    m[next_empty++] = (b & masks[i]) == masks[i];
-                }
-                return true;
-            }
-            return false;
-        }
-        bool pop_byte(byte& b) {
-            auto t = hufftree;
-            unsigned bit_loc = 0;
 
-            // while we may still have a full tree-path in the buffer...
-            while(bit_loc < next_empty) {
-                if (t->is_leaf()) {
-                    b = t->i;
-                    copy(m.begin()+bit_loc, m.begin()+next_empty, m.begin());
-                    next_empty -= bit_loc;
-                    return true;
-                }
-                if (m[bit_loc++]) {
-                    t = t->r;
-                }
-                else {
-                    t = t->l;
-                }
-            }
-            return false;
-        }
-};
-
-void decode(istream& infile, ostream& outfile) {
-    const int bytes_to_write = 610158-1;
+void decode(istream& infile, ostream& outfile, const int bytes_to_write=4264316) {
     int written = 0;
-    decode_buffer huffbuff;
+    decode_buffer huffbuff(numsymbs, hufftree);
 
     while(!infile.eof()) {
         bool buffer_has_room = true;
@@ -198,17 +100,18 @@ void decode(istream& infile, ostream& outfile) {
         }
     }
 }
-//
-// read through the file.
+
+// read through the file, compute frequency table.
 // returns the number of bytes read.
-unsigned compute_freqs(istream& in) {
+unsigned compute_freqs(istream& in, vector<double>& freqs) {
+    vector<unsigned> hist(numsymbs,0);
     unsigned total = 0;
     while (!in.eof()) {
         byte a = in.get();
         hist[a] += 1;
         total += 1;
     }
-    for (int i = 0; i < numsymbs; ++i) {
+    for (int i = 0; i < freqs.size(); ++i) {
         freqs[i] = static_cast<double>(hist[i])/
                    static_cast<double>(total);
     }
@@ -217,36 +120,31 @@ unsigned compute_freqs(istream& in) {
 
 
 
-// this "works", from my ad-hoc testing. That outputs 17, for instansce.
-//    array<bool,buffsize> a;
-//    a[0] = 1;
-//    a[1] = 0;
-//    a[2] = 0;
-//    a[3] = 0;
-//    a[4] = 1;
-//    a[5] = 0;
-//    a[6] = 0;
-//    a[7] = 0;
-//    cout << (int)bits_to_byte(a) << endl;
 
 const string usage_string = "Usage: ./huffman -e < file > encoding_description\n"
                             "       ./huffman -c encoding_description < orig_file > compression\n"
                             "       ./huffman -d encoding_description < compression > orig_file\n";
 
 int main(int argc, char* argv[]) {
+    vector<string> encodings(numsymbs,"");
     if (argc == 2 && strncmp(argv[1],"-e",2) == 0) {
-        cerr << "Encoding!" << endl;
-        auto bytes_read = compute_freqs(cin);
+        vector<double> freqs(numsymbs,0);
+        auto bytes_read = compute_freqs(cin, freqs);
         auto tree = generate_tree(freqs);
-        cerr << "Bytes read: " << bytes_read << endl;
+        cout << bytes_read - 1 << " ";
         write_htree(tree, cout);
         cout << endl;
     }
     else if (argc == 3 && strncmp(argv[1], "-p",2) == 0) {
         ifstream tree_file(argv[2]);
+        unsigned bytecount;
+        tree_file >> bytecount;
         hufftree = read_htree(tree_file);
         generate_encodings(hufftree, encodings);
-        for (int b = 0; b < numsymbs; ++b) {
+        for (int b = 0; b < encodings.size(); ++b) {
+            // if symbol with index b is not in the file,
+            // we may choose to not include it in our huffman
+            // tree
             if (encodings[b] != "") {
                 cout << b << " " << encodings[b] << endl;
             }
@@ -254,14 +152,17 @@ int main(int argc, char* argv[]) {
     }
     else if (argc == 3 && strncmp(argv[1], "-c",2) == 0) {
         ifstream tree_file(argv[2]);
+        unsigned bytecount;
+        tree_file >> bytecount;
         hufftree = read_htree(tree_file);
-        generate_encodings(hufftree, encodings);
         encode(cin, cout);
     }
     else if (argc == 3 && strncmp(argv[1], "-d",2) == 0) {
         ifstream tree_file(argv[2]);
+        unsigned bytecount;
+        tree_file >> bytecount;
         hufftree = read_htree(tree_file);
-        decode(cin, cout);
+        decode(cin, cout, bytecount);
     }
     else {
         cout << usage_string;

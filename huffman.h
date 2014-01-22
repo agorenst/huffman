@@ -29,9 +29,6 @@ struct htree {
     // defined because of read_htree
     htree(): l(NULL), r(NULL), w(0), i(-1) {}
     
-//    ~htree() {
-//        std::cerr << "htree being deleted" << std::endl;
-//    }
 };
 
 std::shared_ptr<htree> generate_tree(const std::vector<double>& freqs);

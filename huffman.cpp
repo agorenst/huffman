@@ -18,6 +18,7 @@ struct cmp_ptr{
     }
 };
 
+
 shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
     if (freqs.size() == 0) { return NULL; } // not sure what else to do, tempted to assert
 
@@ -25,7 +26,10 @@ shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
 
     // recall the wq really stores shared_ptrs, so this "new" stuff is safe.
     for (auto i = 0; i < freqs.size(); ++i) {
+        // this IF statement works so long as we don't have rounding errors, haha.
+        //if (freqs[i] > 0) {
         wq.emplace(new htree(freqs[i], i));
+        //}
     }
 
     while(wq.size() > 1) {
@@ -106,7 +110,6 @@ shared_ptr<htree> read_htree(std::istream& in) {
             graft_spot->r = to_graft;
         }
         else {
-            cerr << "GRAFTING ROOT" << endl;
             root = to_graft;
         }
     }
