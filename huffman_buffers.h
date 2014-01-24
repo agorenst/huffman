@@ -43,6 +43,7 @@ class encode_buffer {
 class decode_buffer {
     public:
         std::array<bool,buffsize> m;
+        // can't do the c++11 thing yet, for g++ compatibility
         unsigned next_empty;// = 0;
         unsigned first_data;// = 0; 
         const std::shared_ptr<htree> hufftree;

@@ -106,7 +106,9 @@ bool decode_buffer::put_byte(const byte b) {
 }
 
 bool decode_buffer::pop_byte(int& b) {
-    auto t = hufftree;
+    // we just traverse the tree, so we don't need
+    // to waste time with shared_ptr increment stuff
+    auto t = hufftree.get();
     unsigned bit_loc = first_data;
 
     // while we may still have a full tree-path in the buffer...
@@ -122,10 +124,10 @@ bool decode_buffer::pop_byte(int& b) {
             return true;
         }
         if (m[bit_loc++]) {
-            t = t->r;
+            t = t->r.get();
         }
         else {
-            t = t->l;
+            t = t->l.get();
         }
     }
     return false;
