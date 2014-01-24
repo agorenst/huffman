@@ -6,11 +6,12 @@
 #include <stack>
 #include <tuple>
 
-#include<cassert>
+#include <cassert>
 
 #include <memory>
 
 using namespace std;
+using namespace huffman;
 
 struct cmp_ptr{
     bool operator()(const shared_ptr<htree>& l, const shared_ptr<htree>& r) {
@@ -19,7 +20,7 @@ struct cmp_ptr{
 };
 
 
-shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
+shared_ptr<htree> huffman::generate_tree(const std::vector<double>& freqs) {
     if (freqs.size() == 0) { return NULL; } // not sure what else to do, tempted to assert
 
     priority_queue<shared_ptr<htree>, vector<shared_ptr<htree>>, cmp_ptr> wq;
@@ -30,10 +31,10 @@ shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
     // report issues when running the old code with clang++
     for (unsigned i = 0; i < freqs.size(); ++i) {
         // this IF statement works so long as we don't have rounding errors, haha.
-        //if (freqs[i] > 0) {
-        shared_ptr<htree> to_insert(new htree(freqs[i], i));
-        wq.push(to_insert);
-        //}
+        if (freqs[i] > 0) {
+            shared_ptr<htree> to_insert(new htree(freqs[i], i));
+            wq.push(to_insert);
+        }
     }
 
     while(wq.size() > 1) {
@@ -45,7 +46,12 @@ shared_ptr<htree> generate_tree(const std::vector<double>& freqs) {
     return wq.top();
 }
 
-void write_htree(const shared_ptr<htree> h, ostream& o) {
+// we explore the htree in a DFS fashion, always going "left"
+// if we can to. KEY FACT: we only go "right" immediately after
+// encountering a leaf---thus, when we encounter a leaf, we 
+// "pop" back up to the last-visited inner node, and continue from there.
+// nodes_since_leaf is sort of like a run-length-encoding.
+void huffman::write_htree(const shared_ptr<htree> h, ostream& o) {
     int nodes_since_leaf = 0;
     stack<shared_ptr<htree>> wq;
 
@@ -66,9 +72,10 @@ void write_htree(const shared_ptr<htree> h, ostream& o) {
     }
 }
 
-// this builds an htree, but doesn't fill in the weights (w).
-// so be wary?
-shared_ptr<htree> read_htree(std::istream& in) {
+// The counterpart to write_htree.
+// This is a fairly tricky algorithm, but it is really
+// "just" the opposite of write_htree
+shared_ptr<htree> huffman::read_htree(std::istream& in) {
     int newnodes, symb;
 
     shared_ptr<htree> root = NULL;
@@ -77,6 +84,13 @@ shared_ptr<htree> read_htree(std::istream& in) {
     // child---thus, it is the "incomplete" nodes
     stack<shared_ptr<htree>> wq;
 
+    // the loop invariants:
+    // wq contains all vertices of the htree-built-so-far
+    // that are both INNER and have ONLY their left-child
+    // defined
+    // 
+    // Each iteration of the loop constructs a new subtree
+    // with a root (to_graft), to be grafted onto the top of wq
     for (;;) {
         in >> newnodes;
         in >> symb;
@@ -84,8 +98,10 @@ shared_ptr<htree> read_htree(std::istream& in) {
 
         // if we've triggered EOF after reading, we're done.
         if (in.eof()) {
+            assert(wq.size() == 0);
             return root;
         }
+
         // basically deal with the edge case that
         // we don't have a root yet.
         // if statement will succeed after first iteration.
@@ -95,9 +111,11 @@ shared_ptr<htree> read_htree(std::istream& in) {
             wq.pop();
         }
 
-        // n is the "undefined" node
+        // n is the "undefined" node (a root of a subtree)
         // we have memory for it, but it may be inner or a leaf.
         shared_ptr<htree> n(new htree);
+
+        // remember the root of the subtree we're about to build
         shared_ptr<htree> to_graft = n;
 
         // each go around means n is an inner node!
@@ -119,7 +137,7 @@ shared_ptr<htree> read_htree(std::istream& in) {
     }
 }
 
-void generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
+void huffman::generate_encodings(const shared_ptr<htree> h, vector<string>& encodings) {
     typedef tuple<shared_ptr<htree>, unsigned, bool> tree_state;
 
     vector<char> codeword(encodings.size());
